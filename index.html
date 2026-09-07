@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>MPWS OBT Time Tracker</title>
+
+<style>
+
+:root{
+    --mpws-blue:#00AEEF;
+    --mpws-dark:#003366;
+    --mpws-green:#A7D129;
+    --bg:#f4f7fa;
+}
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial,sans-serif;
+}
+
+body{
+    background:var(--bg);
+    padding:20px;
+}
+
+.container{
+    max-width:1000px;
+    margin:auto;
+    background:#fff;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.1);
+}
+
+.header{
+    text-align:center;
+    margin-bottom:20px;
+}
+
+.logo{
+    width:90px;
+    height:auto;
+    margin-bottom:10px;
+}
+
+.live-clock{
+    font-weight:bold;
+    margin-top:10px;
+    color:#003366;
+}
+
+/* ---- approval status banner ---- */
+
+.approval-banner{
+    display:none;
+    margin-bottom:18px;
+    padding:12px 16px;
+    border-radius:8px;
+    font-weight:bold;
+    font-size:14px;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+}
+
+.approval-banner.show{
+    display:flex;
+}
+
+.approval-banner.pending{
+    background:#fff3e0;
+    color:#e65100;
+    border:1px solid #ffcc80;
+}
+
+.approval-banner.approved{
+    background:#e8f5e9;
+    color:#2e7d32;
+    border:1px solid #a5d6a7;
+}
+
+.approval-banner a,
+.approval-banner button{
+    font-size:13px;
+    background:var(--mpws-dark);
+    color:#fff;
+    border:none;
+    padding:6px 12px;
+    border-radius:6px;
+    text-decoration:none;
+    cursor:pointer;
+    font-weight:bold;
+}
+
+/* ---- locked entry section ---- */
+
+#entrySection{
+    position:relative;
+}
+
+#entrySection.locked .form-grid,
+#entrySection.locked .submit-row{
+    opacity:0.4;
+    pointer-events:none;
+    filter:grayscale(40%);
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+    gap:15px;
+}
+
+label{
+    font-weight:bold;
+    display:block;
+    margin-bottom:5px;
+}
+
+input,
+select,
+textarea{
+    width:100%;
+    padding:10px;
+    border:1px solid #ccc;
+    border-radius:6px;
+}
+
+.time-row{
+    display:flex;
+    gap:8px;
+}
+
+.time-row input{
+    flex:1;
+}
+
+.now-btn{
+    padding:0 14px;
+    border:none;
+    border-radius:6px;
+    background:var(--mpws-blue);
+    color:#fff;
+    font-weight:bold;
+    cursor:pointer;
+    white-space:nowrap;
+}
+
+.now-btn:hover{
+    background:var(--mpws-dark);
+}
+
+.submit-row{
+    margin-top:20px;
+    text-align:center;
+}
+
+.submit-btn{
+    padding:12px 40px;
+    border:none;
+    border-radius:8px;
+    background:var(--mpws-green);
+    color:#003366;
+    font-weight:bold;
+    font-size:16px;
+    cursor:pointer;
+}
+
+.submit-btn:hover{
+    opacity:0.9;
+}
+
+.submit-btn:disabled{
+    opacity:0.6;
+    cursor:not-allowed;
+}
+
+.status-msg{
+    margin-top:10px;
+    font-weight:bold;
+}
+
+.status-msg.success{
+    color:#2e7d32;
+}
+
+.status-msg.error{
+    color:#c62828;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+
+        <img
+            src="data:image/png;base64,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"
+            alt="Metro Pacific Water Solutions Logo"
+            class="logo">
+
+        <h1>OBT Time Tracker</h1>
+
+        <p>
+            Metro Pacific Water Solutions
+        </p>
+
+        <div
+            id="liveClock"
+            class="live-clock">
+        </div>
+
+    </div>
+
+    <div id="approvalBanner" class="approval-banner">
+        <span id="approvalBannerText"></span>
+        <button type="button" id="approvalRecheckBtn" onclick="recheckApproval()" style="display:none;">Check Again</button>
+        <a id="approvalBannerLink" href="OBT_Request.html">Request Approval</a>
+    </div>
+
+    <div class="form-grid">
+
+        <div>
+
+            <label>
+                Employee Type
+            </label>
+
+            <select
+                id="employeeType"
+                onchange="onEmployeeTypeChange()">
+
+                <option value="">
+                    Select Type
+                </option>
+
+                <option value="SEMI">
+                    SEMI
+                </option>
+
+                <option value="DAILY">
+                    DAILY
+                </option>
+
+            </select>
+
+        </div>
+
+        <div>
+
+            <label>
+                Employee Name
+            </label>
+
+            <input
+                type="text"
+                id="name"
+                list="employeeNamesDatalist"
+                placeholder="Type to search..."
+                oninput="onEmployeeNameInput()"
+                autocomplete="off"
+                disabled>
+
+            <datalist id="employeeNamesDatalist"></datalist>
+
+        </div>
+
+        <div>
+
+            <label>
+                Employee Number
+            </label>
+
+            <input
+                type="text"
+                id="employeeNumber"
+                readonly>
+
+        </div>
+
+        <div>
+
+            <label>
+                Department
+            </label>
+
+            <input
+                type="text"
+                id="department"
+                readonly>
+
+        </div>
+
+        <div>
+
+            <label>
+                Cost Center
+            </label>
+
+            <input
+                type="text"
+                id="costCenter"
+                readonly>
+
+        </div>
+
+    </div>
+
+    <div id="entrySection" class="locked">
+
+    <div class="form-grid">
+
+        <div>
+
+            <label>
+                Time In
+            </label>
+
+            <div class="time-row">
+                <input type="time"
+                       id="timeIn">
+                <button type="button"
+                        class="now-btn"
+                        onclick="setNow('timeIn')">Now</button>
+            </div>
+
+        </div>
+
+        <div>
+
+            <label>
+                Time Out
+            </label>
+
+            <div class="time-row">
+                <input type="time"
+                       id="timeOut">
+                <button type="button"
+                        class="now-btn"
+                        onclick="setNow('timeOut')">Now</button>
+            </div>
+
+        </div>
+
+        <div>
+
+            <label>
+                Break Start
+            </label>
+
+            <div class="time-row">
+                <input type="time"
+                       id="breakStart">
+                <button type="button"
+                        class="now-btn"
+                        onclick="setNow('breakStart')">Now</button>
+            </div>
+
+        </div>
+
+        <div>
+
+            <label>
+                Break End
+            </label>
+
+            <div class="time-row">
+                <input type="time"
+                       id="breakEnd">
+                <button type="button"
+                        class="now-btn"
+                        onclick="setNow('breakEnd')">Now</button>
+            </div>
+
+        </div>
+
+        <div id="dailyOnlyFields" style="display:none;">
+
+            <div>
+
+                <label>
+                    Project Site
+                </label>
+
+                <input type="text"
+                       id="projectSite"
+                       list="projectSitesDatalist"
+                       placeholder="Type to search..."
+                       oninput="onProjectSiteInput()"
+                       autocomplete="off">
+
+                <datalist id="projectSitesDatalist"></datalist>
+
+            </div>
+
+            <div>
+
+                <label>
+                    Project Code
+                </label>
+
+                <input type="text"
+                       id="sapCode"
+                       readonly>
+
+            </div>
+
+        </div>
+
+
+        <div style="grid-column:1/-1;">
+
+            <label>
+                Reason for OBT
+            </label>
+
+            <textarea
+                id="reason"
+                rows="3">
+            </textarea>
+
+        </div>
+
+    </div>
+
+    <div class="submit-row">
+
+        <button type="button"
+                id="submitBtn"
+                class="submit-btn"
+                onclick="submitForm()">
+            Submit
+        </button>
+
+        <div id="statusMsg" class="status-msg"></div>
+
+    </div>
+
+    </div><!-- /entrySection -->
+
+</div>
+
+<script>
+
+/* ================================
+   EMPLOYEE LISTS
+   ================================ */
+
+let dailyEmployees = [];
+let semiEmployees = [];
+let sapCodes = [];
+let selectedCostCenter = "";
+let selectedProjectSiteName = "";
+let isApproved = false;
+
+const EMPLOYEE_DATA_URL =
+    "https://script.google.com/macros/s/AKfycbxPyfgOy6N28MFhnfiUUB5KGvQwBY5bwCUAsa3U33cg5ulsKt2ASKJQu1p45IBRc_oe/exec";
+
+
+function loadEmployeeData(){
+
+    const typeDdl =
+        document.getElementById("employeeType");
+
+    const statusEl =
+        document.getElementById("statusMsg");
+
+    typeDdl.disabled = true;
+
+    fetch(EMPLOYEE_DATA_URL + "?action=getData")
+
+        .then(function(response){
+
+            if(!response.ok){
+                throw new Error(
+                    "HTTP " + response.status + " " + response.statusText
+                );
+            }
+
+            return response.text();
+
+        })
+
+        .then(function(text){
+
+            let data;
+
+            try {
+                data = JSON.parse(text);
+            } catch(parseErr){
+                console.error("Response was not JSON:", text);
+                throw new Error(
+                    "Server did not return JSON (check the Web App is deployed with access set to Anyone)."
+                );
+            }
+
+            dailyEmployees = data.daily || [];
+            semiEmployees = data.semi || [];
+            sapCodes = data.sap || [];
+
+            typeDdl.disabled = false;
+
+            populateSapCodes();
+
+        })
+
+        .catch(function(err){
+
+            console.error("loadEmployeeData failed:", err);
+
+            statusEl.textContent =
+                "Could not load employee/project code list: " +
+                err.message;
+
+            statusEl.className =
+                "status-msg error";
+
+        });
+
+}
+
+
+function populateSapCodes(){
+
+    const datalist =
+        document.getElementById("projectSitesDatalist");
+
+    datalist.innerHTML = "";
+
+    sapCodes.forEach(row => {
+
+        const option =
+            document.createElement("option");
+
+        option.value =
+            row.name + " (" + row.code + ")";
+
+        datalist.appendChild(option);
+
+    });
+
+    document.getElementById("projectSite").disabled = false;
+
+}
+
+
+function onProjectSiteInput(){
+
+    const typed =
+        document.getElementById("projectSite").value;
+
+    const row =
+        sapCodes.find(
+            r => (r.name + " (" + r.code + ")") === typed
+        );
+
+    document.getElementById("sapCode").value =
+        row ? row.code : "";
+
+    selectedProjectSiteName =
+        row ? row.name : "";
+
+}
+
+
+function onEmployeeTypeChange(){
+
+    const type =
+        document.getElementById("employeeType").value;
+
+    const nameInput =
+        document.getElementById("name");
+
+    const datalist =
+        document.getElementById("employeeNamesDatalist");
+
+    datalist.innerHTML = "";
+    nameInput.value = "";
+    document.getElementById("employeeNumber").value = "";
+    document.getElementById("department").value = "";
+    document.getElementById("costCenter").value = "";
+    selectedCostCenter = "";
+
+    toggleDailyOnlyFields(type);
+    hideApprovalBanner();
+
+    if(!type){
+
+        nameInput.disabled = true;
+        nameInput.placeholder = "Select Employee Type First";
+
+        return;
+
+    }
+
+    const list =
+        type === "DAILY" ?
+            dailyEmployees :
+            semiEmployees;
+
+    list.forEach(emp => {
+
+        const option =
+            document.createElement("option");
+
+        option.value =
+            emp.name +
+            " (" +
+            emp.empNo +
+            ")";
+
+        datalist.appendChild(option);
+
+    });
+
+    nameInput.disabled = false;
+    nameInput.placeholder =
+        list.length === 0 ?
+            "No employees loaded for this type yet" :
+            "Type to search...";
+
+}
+
+
+function onEmployeeNameInput(){
+
+    const type =
+        document.getElementById("employeeType").value;
+
+    const typed =
+        document.getElementById("name").value;
+
+    const list =
+        type === "DAILY" ?
+            dailyEmployees :
+            semiEmployees;
+
+    const employee =
+        list.find(
+            e => (e.name + " (" + e.empNo + ")") === typed
+        );
+
+    if(employee){
+
+        document.getElementById("employeeNumber").value =
+            employee.empNo;
+
+        document.getElementById("department").value =
+            employee.department;
+
+        selectedCostCenter =
+            employee.costCenter || "";
+
+        document.getElementById("costCenter").value =
+            selectedCostCenter;
+
+        checkApprovalStatus(employee.empNo);
+
+    } else {
+
+        document.getElementById("employeeNumber").value = "";
+        document.getElementById("department").value = "";
+        selectedCostCenter = "";
+        document.getElementById("costCenter").value = "";
+        hideApprovalBanner();
+        lockEntrySection();
+
+    }
+
+}
+
+
+/* ================================
+   APPROVAL GATE
+   ================================
+   Called once an employee is selected. Locks the rest of the form
+   (opacity + pointer-events: none) until an Approved OBT Request
+   exists for today. The banner links to OBT_Request.html and has a
+   "Check Again" button for after the manager approves.
+*/
+
+let lastCheckedEmpNo = "";
+
+function checkApprovalStatus(empNo){
+
+    lastCheckedEmpNo = empNo;
+
+    const banner =
+        document.getElementById("approvalBanner");
+
+    const bannerText =
+        document.getElementById("approvalBannerText");
+
+    const bannerLink =
+        document.getElementById("approvalBannerLink");
+
+    const recheckBtn =
+        document.getElementById("approvalRecheckBtn");
+
+    banner.className = "approval-banner show pending";
+    bannerText.textContent = "Checking approval status...";
+    bannerLink.style.display = "none";
+    recheckBtn.style.display = "none";
+
+    // "_=" + Date.now() is a cache-buster — GET requests to the Apps
+    // Script web app can otherwise get cached by the browser, showing a
+    // stale "not approved" result even right after a manager approves.
+    fetch(EMPLOYEE_DATA_URL + "?action=checkApproval&empNo=" + encodeURIComponent(empNo) + "&_=" + Date.now())
+
+        .then(function(response){ return response.json(); })
+
+        .then(function(res){
+
+            isApproved = !!res.approved;
+
+            if(isApproved){
+
+                banner.className = "approval-banner show approved";
+                bannerText.textContent = "Approved — you can submit your OBT entry.";
+                bannerLink.style.display = "none";
+                recheckBtn.style.display = "none";
+                unlockEntrySection();
+
+            } else {
+
+                banner.className = "approval-banner show pending";
+                bannerText.textContent = "No approved OBT request for today yet.";
+                bannerLink.textContent = "Request Approval";
+                bannerLink.style.display = "inline-block";
+                recheckBtn.style.display = "inline-block";
+                lockEntrySection();
+
+            }
+
+        })
+
+        .catch(function(){
+
+            banner.className = "approval-banner show pending";
+            bannerText.textContent = "Could not check approval status. Try again.";
+            bannerLink.style.display = "none";
+            recheckBtn.style.display = "inline-block";
+            lockEntrySection();
+
+        });
+
+}
+
+function recheckApproval(){
+    if(lastCheckedEmpNo){
+        checkApprovalStatus(lastCheckedEmpNo);
+    }
+}
+
+function hideApprovalBanner(){
+    document.getElementById("approvalBanner").className = "approval-banner";
+}
+
+function lockEntrySection(){
+    document.getElementById("entrySection").classList.add("locked");
+}
+
+function unlockEntrySection(){
+    document.getElementById("entrySection").classList.remove("locked");
+}
+
+
+function toggleDailyOnlyFields(type){
+
+    const group =
+        document.getElementById("dailyOnlyFields");
+
+    if(type === "DAILY" || type === "SEMI"){
+
+        group.style.display = "contents";
+
+    } else {
+
+        group.style.display = "none";
+
+        document.getElementById("sapCode").value = "";
+        document.getElementById("projectSite").value = "";
+        selectedProjectSiteName = "";
+
+    }
+
+}
+
+
+function setNow(fieldId){
+
+    const now =
+        new Date();
+
+    const hh =
+        String(now.getHours()).padStart(2, "0");
+
+    const mm =
+        String(now.getMinutes()).padStart(2, "0");
+
+    document.getElementById(
+        fieldId
+    ).value =
+        hh + ":" + mm;
+
+}
+
+
+/* ================================
+   SUBMIT
+   ================================
+   NOTE: no "mode: no-cors" here on purpose — that made the browser
+   blind to the server's response, so it always reported "success"
+   even when the server rejected the submission (e.g. not approved
+   yet). A normal fetch with Content-Type: text/plain avoids the
+   CORS preflight Apps Script doesn't handle, while still letting us
+   read the real success/failure message back.
+*/
+
+function submitForm(){
+
+    if(!isApproved){
+
+        const statusEl = document.getElementById("statusMsg");
+        statusEl.textContent = "This OBT entry is not approved yet.";
+        statusEl.className = "status-msg error";
+        return;
+
+    }
+
+    const employeeType =
+        document.getElementById("employeeType").value;
+
+    const empNo =
+        document.getElementById("employeeNumber").value;
+
+    const name =
+        document.getElementById("name").value.split(" (")[0];
+
+    const department =
+        document.getElementById("department").value;
+
+    const timeIn =
+        document.getElementById("timeIn").value;
+
+    const timeOut =
+        document.getElementById("timeOut").value;
+
+    const breakStart =
+        document.getElementById("breakStart").value;
+
+    const breakEnd =
+        document.getElementById("breakEnd").value;
+
+    const projectSite =
+        selectedProjectSiteName;
+
+    const sapCode =
+        document.getElementById("sapCode").value;
+
+    const costCenter =
+        selectedCostCenter;
+
+    const reason =
+        document.getElementById("reason").value;
+
+    const statusEl =
+        document.getElementById("statusMsg");
+
+    if(!employeeType){
+
+        statusEl.textContent =
+            "Please select an employee type (SEMI or DAILY).";
+
+        statusEl.className =
+            "status-msg error";
+
+        return;
+
+    }
+
+    if(!empNo){
+
+        statusEl.textContent =
+            "Please select an employee.";
+
+        statusEl.className =
+            "status-msg error";
+
+        return;
+
+    }
+
+    if(EMPLOYEE_DATA_URL.indexOf("PASTE_YOUR") === 0){
+
+        statusEl.textContent =
+            "Web App URL not configured yet. See setup instructions.";
+
+        statusEl.className =
+            "status-msg error";
+
+        return;
+
+    }
+
+    const submitBtn =
+        document.getElementById("submitBtn");
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Submitting...";
+
+    statusEl.textContent = "";
+    statusEl.className = "status-msg";
+
+    const payload = {
+
+        employeeType: employeeType,
+        empNo: empNo,
+        name: name,
+        department: department,
+        timeIn: timeIn,
+        timeOut: timeOut,
+        breakStart: breakStart,
+        breakEnd: breakEnd,
+        projectSite: projectSite,
+        sapCode: sapCode,
+        costCenter: costCenter,
+        reason: reason
+
+    };
+
+    fetch(EMPLOYEE_DATA_URL, {
+
+        method: "POST",
+        headers: {
+            "Content-Type": "text/plain"
+        },
+        body: JSON.stringify(payload)
+
+    })
+    .then(function(response){ return response.json(); })
+    .then(function(res){
+
+        if(res.success){
+
+            statusEl.textContent =
+                "Submitted successfully!";
+
+            statusEl.className =
+                "status-msg success";
+
+            resetForm();
+
+        } else {
+
+            statusEl.textContent =
+                res.message || "Submission failed. Please try again.";
+
+            statusEl.className =
+                "status-msg error";
+
+            if(/not approved|approved OBT request/i.test(res.message || "")){
+                isApproved = false;
+                lockEntrySection();
+                checkApprovalStatus(empNo);
+            }
+
+        }
+
+    })
+    .catch(function(err){
+
+        statusEl.textContent =
+            "Submission failed. Please try again.";
+
+        statusEl.className =
+            "status-msg error";
+
+    })
+    .finally(function(){
+
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit";
+
+    });
+
+}
+
+
+function resetForm(){
+
+    document.getElementById("employeeType").value = "";
+    document.getElementById("employeeNumber").value = "";
+    document.getElementById("name").value = "";
+    document.getElementById("name").disabled = true;
+    document.getElementById("name").placeholder = "Select Employee Type First";
+    document.getElementById("department").value = "";
+    document.getElementById("timeIn").value = "";
+    document.getElementById("timeOut").value = "";
+    document.getElementById("breakStart").value = "";
+    document.getElementById("breakEnd").value = "";
+    document.getElementById("projectSite").value = "";
+    selectedProjectSiteName = "";
+    document.getElementById("sapCode").value = "";
+    document.getElementById("costCenter").value = "";
+    selectedCostCenter = "";
+    document.getElementById("reason").value = "";
+
+    toggleDailyOnlyFields("");
+    hideApprovalBanner();
+    lockEntrySection();
+    isApproved = false;
+
+}
+
+
+function updateClock(){
+
+    const now =
+        new Date();
+
+    document.getElementById(
+        "liveClock"
+    ).innerHTML =
+
+        now.toLocaleDateString() +
+        " | " +
+        now.toLocaleTimeString();
+
+}
+
+window.onload = function(){
+
+    updateClock();
+
+    setInterval(
+        updateClock,
+        1000
+    );
+
+    loadEmployeeData();
+
+};
+
+</script>
+
+</body>
+</html>
