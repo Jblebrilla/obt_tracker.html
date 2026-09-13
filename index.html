@@ -102,7 +102,7 @@ body{
     position:relative;
 }
 
-#entrySection.locked .form-grid,
+#entrySection.locked .site-entries,
 #entrySection.locked .submit-row{
     opacity:0.4;
     pointer-events:none;
@@ -122,8 +122,7 @@ label{
 }
 
 input,
-select,
-textarea{
+select{
     width:100%;
     padding:10px;
     border:1px solid #ccc;
@@ -152,6 +151,39 @@ textarea{
 
 .now-btn:hover{
     background:var(--mpws-dark);
+}
+
+/* ---- per-site log in/out cards ---- */
+
+.site-entries{
+    margin-top:20px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+}
+
+.site-card{
+    border:1px solid #dde3ea;
+    border-radius:10px;
+    padding:14px 16px;
+    background:#fafbfc;
+}
+
+.site-card h3{
+    font-size:15px;
+    color:var(--mpws-dark);
+    margin-bottom:10px;
+}
+
+.site-card .form-grid{
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+}
+
+.no-sites-msg{
+    text-align:center;
+    color:#888;
+    padding:20px;
+    font-style:italic;
 }
 
 .submit-row{
@@ -315,119 +347,8 @@ textarea{
 
     <div id="entrySection" class="locked">
 
-    <div class="form-grid">
-
-        <div>
-
-            <label>
-                Time In
-            </label>
-
-            <div class="time-row">
-                <input type="time"
-                       id="timeIn">
-                <button type="button"
-                        class="now-btn"
-                        onclick="setNow('timeIn')">Now</button>
-            </div>
-
-        </div>
-
-        <div>
-
-            <label>
-                Time Out
-            </label>
-
-            <div class="time-row">
-                <input type="time"
-                       id="timeOut">
-                <button type="button"
-                        class="now-btn"
-                        onclick="setNow('timeOut')">Now</button>
-            </div>
-
-        </div>
-
-        <div>
-
-            <label>
-                Break Start
-            </label>
-
-            <div class="time-row">
-                <input type="time"
-                       id="breakStart">
-                <button type="button"
-                        class="now-btn"
-                        onclick="setNow('breakStart')">Now</button>
-            </div>
-
-        </div>
-
-        <div>
-
-            <label>
-                Break End
-            </label>
-
-            <div class="time-row">
-                <input type="time"
-                       id="breakEnd">
-                <button type="button"
-                        class="now-btn"
-                        onclick="setNow('breakEnd')">Now</button>
-            </div>
-
-        </div>
-
-        <div id="dailyOnlyFields" style="display:none;">
-
-            <div>
-
-                <label>
-                    Project Site
-                </label>
-
-                <input type="text"
-                       id="projectSite"
-                       list="projectSitesDatalist"
-                       placeholder="Type to search..."
-                       oninput="onProjectSiteInput()"
-                       autocomplete="off">
-
-                <datalist id="projectSitesDatalist"></datalist>
-
-            </div>
-
-            <div>
-
-                <label>
-                    Project Code
-                </label>
-
-                <input type="text"
-                       id="sapCode"
-                       readonly>
-
-            </div>
-
-        </div>
-
-
-        <div style="grid-column:1/-1;">
-
-            <label>
-                Reason for OBT
-            </label>
-
-            <textarea
-                id="reason"
-                rows="3">
-            </textarea>
-
-        </div>
-
+    <div id="siteEntries" class="site-entries">
+        <div class="no-sites-msg">Select your name above to see your approved sites here.</div>
     </div>
 
     <div class="submit-row">
@@ -457,8 +378,8 @@ let dailyEmployees = [];
 let semiEmployees = [];
 let sapCodes = [];
 let selectedCostCenter = "";
-let selectedProjectSiteName = "";
 let isApproved = false;
+let approvedSiteList = [];
 
 const EMPLOYEE_DATA_URL =
     "https://script.google.com/macros/s/AKfycbwnqK7E6-Vn4W32_gqxYAPdAZQWfggKZAmnaLbXtzE_gH-mO-rLinzardVLg71HBaCI/exec";
@@ -507,8 +428,6 @@ function loadEmployeeData(){
 
             typeDdl.disabled = false;
 
-            populateSapCodes();
-
         })
 
         .catch(function(err){
@@ -527,45 +446,56 @@ function loadEmployeeData(){
 }
 
 
-function populateSapCodes(){
+/* Build one log in/out card per approved site. This is the ONLY way
+   sites appear on this page — nothing is selectable beyond what a
+   manager actually approved for today. */
+function renderApprovedSiteEntries(approvedSites){
 
-    const datalist =
-        document.getElementById("projectSitesDatalist");
+    approvedSiteList = approvedSites || [];
 
-    datalist.innerHTML = "";
+    const container =
+        document.getElementById("siteEntries");
 
-    sapCodes.forEach(row => {
+    container.innerHTML = "";
 
-        const option =
-            document.createElement("option");
+    if(approvedSiteList.length === 0){
+        container.innerHTML =
+            '<div class="no-sites-msg">No approved sites found for today.</div>';
+        return;
+    }
 
-        option.value =
-            row.name + " (" + row.code + ")";
+    approvedSiteList.forEach((siteName, index) => {
 
-        datalist.appendChild(option);
+        const match =
+            sapCodes.find(
+                r => r.name.trim().toLowerCase() === siteName.trim().toLowerCase()
+            );
+
+        const card = document.createElement("div");
+        card.className = "site-card";
+        card.innerHTML =
+            '<h3>' + siteName + '</h3>' +
+            '<div class="form-grid">' +
+                '<div>' +
+                    '<label>Time In</label>' +
+                    '<div class="time-row">' +
+                        '<input type="time" id="siteTimeIn_' + index + '">' +
+                        '<button type="button" class="now-btn" onclick="setNow(\'siteTimeIn_' + index + '\')">Now</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div>' +
+                    '<label>Time Out</label>' +
+                    '<div class="time-row">' +
+                        '<input type="time" id="siteTimeOut_' + index + '">' +
+                        '<button type="button" class="now-btn" onclick="setNow(\'siteTimeOut_' + index + '\')">Now</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        card.dataset.site = siteName;
+        card.dataset.code = match ? match.code : "";
+        container.appendChild(card);
 
     });
-
-    document.getElementById("projectSite").disabled = false;
-
-}
-
-
-function onProjectSiteInput(){
-
-    const typed =
-        document.getElementById("projectSite").value;
-
-    const row =
-        sapCodes.find(
-            r => (r.name + " (" + r.code + ")") === typed
-        );
-
-    document.getElementById("sapCode").value =
-        row ? row.code : "";
-
-    selectedProjectSiteName =
-        row ? row.name : "";
 
 }
 
@@ -588,8 +518,9 @@ function onEmployeeTypeChange(){
     document.getElementById("costCenter").value = "";
     selectedCostCenter = "";
 
-    toggleDailyOnlyFields(type);
     hideApprovalBanner();
+    renderApprovedSiteEntries([]);
+    lockEntrySection();
 
     if(!type){
 
@@ -670,6 +601,7 @@ function onEmployeeNameInput(){
         selectedCostCenter = "";
         document.getElementById("costCenter").value = "";
         hideApprovalBanner();
+        renderApprovedSiteEntries([]);
         lockEntrySection();
 
     }
@@ -680,7 +612,7 @@ function onEmployeeNameInput(){
 /* ================================
    APPROVAL GATE
    ================================
-   Called once an employee is selected. Locks the rest of the form
+   Called once an employee is selected. Locks the site-entry section
    (opacity + pointer-events: none) until an Approved OBT Request
    exists for today. The banner links to OBT_Request.html and has a
    "Check Again" button for after the manager approves.
@@ -726,6 +658,7 @@ function checkApprovalStatus(empNo){
                 bannerText.textContent = "Approved — you can submit your OBT entry.";
                 bannerLink.style.display = "none";
                 recheckBtn.style.display = "none";
+                renderApprovedSiteEntries(res.sites || []);
                 unlockEntrySection();
 
             } else {
@@ -735,6 +668,7 @@ function checkApprovalStatus(empNo){
                 bannerLink.textContent = "Request Approval";
                 bannerLink.style.display = "inline-block";
                 recheckBtn.style.display = "inline-block";
+                renderApprovedSiteEntries([]);
                 lockEntrySection();
 
             }
@@ -772,28 +706,6 @@ function unlockEntrySection(){
 }
 
 
-function toggleDailyOnlyFields(type){
-
-    const group =
-        document.getElementById("dailyOnlyFields");
-
-    if(type === "DAILY" || type === "SEMI"){
-
-        group.style.display = "contents";
-
-    } else {
-
-        group.style.display = "none";
-
-        document.getElementById("sapCode").value = "";
-        document.getElementById("projectSite").value = "";
-        selectedProjectSiteName = "";
-
-    }
-
-}
-
-
 function setNow(fieldId){
 
     const now =
@@ -816,19 +728,22 @@ function setNow(fieldId){
 /* ================================
    SUBMIT
    ================================
-   NOTE: no "mode: no-cors" here on purpose — that made the browser
-   blind to the server's response, so it always reported "success"
-   even when the server rejected the submission (e.g. not approved
-   yet). A normal fetch with Content-Type: text/plain avoids the
-   CORS preflight Apps Script doesn't handle, while still letting us
-   read the real success/failure message back.
+   Reads each rendered site card's Time In/Time Out and submits one
+   log entry per site. No "mode: no-cors" here on purpose — that made
+   the browser blind to the server's response, so it always reported
+   "success" even when the server rejected the submission. A normal
+   fetch with Content-Type: text/plain avoids the CORS preflight Apps
+   Script doesn't handle, while still letting us read the real
+   success/failure message back.
 */
 
 function submitForm(){
 
+    const statusEl =
+        document.getElementById("statusMsg");
+
     if(!isApproved){
 
-        const statusEl = document.getElementById("statusMsg");
         statusEl.textContent = "This OBT entry is not approved yet.";
         statusEl.className = "status-msg error";
         return;
@@ -847,67 +762,55 @@ function submitForm(){
     const department =
         document.getElementById("department").value;
 
-    const timeIn =
-        document.getElementById("timeIn").value;
-
-    const timeOut =
-        document.getElementById("timeOut").value;
-
-    const breakStart =
-        document.getElementById("breakStart").value;
-
-    const breakEnd =
-        document.getElementById("breakEnd").value;
-
-    const projectSite =
-        selectedProjectSiteName;
-
-    const sapCode =
-        document.getElementById("sapCode").value;
-
     const costCenter =
         selectedCostCenter;
 
-    const reason =
-        document.getElementById("reason").value;
-
-    const statusEl =
-        document.getElementById("statusMsg");
-
     if(!employeeType){
-
-        statusEl.textContent =
-            "Please select an employee type (SEMI or DAILY).";
-
-        statusEl.className =
-            "status-msg error";
-
+        statusEl.textContent = "Please select an employee type (SEMI or DAILY).";
+        statusEl.className = "status-msg error";
         return;
-
     }
 
     if(!empNo){
-
-        statusEl.textContent =
-            "Please select an employee.";
-
-        statusEl.className =
-            "status-msg error";
-
+        statusEl.textContent = "Please select an employee.";
+        statusEl.className = "status-msg error";
         return;
-
     }
 
     if(EMPLOYEE_DATA_URL.indexOf("PASTE_YOUR") === 0){
-
-        statusEl.textContent =
-            "Web App URL not configured yet. See setup instructions.";
-
-        statusEl.className =
-            "status-msg error";
-
+        statusEl.textContent = "Web App URL not configured yet. See setup instructions.";
+        statusEl.className = "status-msg error";
         return;
+    }
 
+    const cards = document.querySelectorAll("#siteEntries .site-card");
+    if(cards.length === 0){
+        statusEl.textContent = "No approved sites to submit.";
+        statusEl.className = "status-msg error";
+        return;
+    }
+
+    const siteEntries = [];
+    let missing = [];
+
+    cards.forEach((card, index) => {
+        const timeIn = document.getElementById("siteTimeIn_" + index).value;
+        const timeOut = document.getElementById("siteTimeOut_" + index).value;
+        if(!timeIn || !timeOut){
+            missing.push(card.dataset.site);
+        }
+        siteEntries.push({
+            site: card.dataset.site,
+            code: card.dataset.code,
+            timeIn: timeIn,
+            timeOut: timeOut
+        });
+    });
+
+    if(missing.length > 0){
+        statusEl.textContent = "Please provide both Time In and Time Out for: " + missing.join(", ");
+        statusEl.className = "status-msg error";
+        return;
     }
 
     const submitBtn =
@@ -920,20 +823,12 @@ function submitForm(){
     statusEl.className = "status-msg";
 
     const payload = {
-
         employeeType: employeeType,
         empNo: empNo,
         name: name,
         department: department,
-        timeIn: timeIn,
-        timeOut: timeOut,
-        breakStart: breakStart,
-        breakEnd: breakEnd,
-        projectSite: projectSite,
-        sapCode: sapCode,
         costCenter: costCenter,
-        reason: reason
-
+        siteEntries: siteEntries
     };
 
     fetch(EMPLOYEE_DATA_URL, {
@@ -951,7 +846,7 @@ function submitForm(){
         if(res.success){
 
             statusEl.textContent =
-                "Submitted successfully!";
+                "Submitted successfully! Logged " + (res.entriesLogged || siteEntries.length) + " site(s).";
 
             statusEl.className =
                 "status-msg success";
@@ -1002,18 +897,13 @@ function resetForm(){
     document.getElementById("name").disabled = true;
     document.getElementById("name").placeholder = "Select Employee Type First";
     document.getElementById("department").value = "";
-    document.getElementById("timeIn").value = "";
-    document.getElementById("timeOut").value = "";
-    document.getElementById("breakStart").value = "";
-    document.getElementById("breakEnd").value = "";
-    document.getElementById("projectSite").value = "";
-    selectedProjectSiteName = "";
-    document.getElementById("sapCode").value = "";
     document.getElementById("costCenter").value = "";
     selectedCostCenter = "";
-    document.getElementById("reason").value = "";
 
-    toggleDailyOnlyFields("");
+    renderApprovedSiteEntries([]);
+    document.getElementById("siteEntries").innerHTML =
+        '<div class="no-sites-msg">Select your name above to see your approved sites here.</div>';
+
     hideApprovalBanner();
     lockEntrySection();
     isApproved = false;
