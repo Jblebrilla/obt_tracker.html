@@ -179,6 +179,65 @@ select{
     grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
 }
 
+.site-card.completed{
+    background:#eefaf0;
+    border-color:#a5d6a7;
+}
+
+.site-status{
+    display:inline-block;
+    font-size:12px;
+    font-weight:bold;
+    padding:2px 10px;
+    border-radius:10px;
+    margin-left:8px;
+    vertical-align:middle;
+}
+
+.site-status.not_started{
+    background:#eceff1;
+    color:#607d8b;
+}
+
+.site-status.checked_in{
+    background:#fff3e0;
+    color:#e65100;
+}
+
+.site-status.completed{
+    background:#e8f5e9;
+    color:#2e7d32;
+}
+
+.site-action-row{
+    margin-top:12px;
+    text-align:right;
+}
+
+.site-action-btn{
+    padding:8px 20px;
+    border:none;
+    border-radius:6px;
+    background:var(--mpws-green);
+    color:#003366;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+.site-action-btn:hover{
+    opacity:0.9;
+}
+
+.site-action-btn:disabled{
+    opacity:0.6;
+    cursor:not-allowed;
+}
+
+.completed-summary{
+    color:#2e7d32;
+    font-weight:bold;
+}
+
 .no-sites-msg{
     text-align:center;
     color:#888;
@@ -352,16 +411,7 @@ select{
     </div>
 
     <div class="submit-row">
-
-        <button type="button"
-                id="submitBtn"
-                class="submit-btn"
-                onclick="submitForm()">
-            Submit
-        </button>
-
         <div id="statusMsg" class="status-msg"></div>
-
     </div>
 
     </div><!-- /entrySection -->
@@ -377,6 +427,7 @@ select{
 let dailyEmployees = [];
 let semiEmployees = [];
 let sapCodes = [];
+let siteCodeList = [];
 let selectedCostCenter = "";
 let isApproved = false;
 let approvedSiteList = [];
@@ -425,6 +476,7 @@ function loadEmployeeData(){
             dailyEmployees = data.daily || [];
             semiEmployees = data.semi || [];
             sapCodes = data.sap || [];
+            siteCodeList = data.sites || [];
 
             typeDdl.disabled = false;
 
@@ -446,9 +498,11 @@ function loadEmployeeData(){
 }
 
 
-/* Build one log in/out card per approved site. This is the ONLY way
-   sites appear on this page — nothing is selectable beyond what a
-   manager actually approved for today. */
+/* Build one card per approved site, reflecting its ACTUAL current state
+   from the server (not_started / checked_in / completed) — this is the
+   ONLY way sites appear on this page, and each card only offers the
+   action that matches its real state, so Time In and Time Out can be
+   logged in two separate visits instead of one sitting. */
 function renderApprovedSiteEntries(approvedSites){
 
     approvedSiteList = approvedSites || [];
@@ -464,35 +518,79 @@ function renderApprovedSiteEntries(approvedSites){
         return;
     }
 
-    approvedSiteList.forEach((siteName, index) => {
+    approvedSiteList.forEach((site, index) => {
 
-        const match =
+        const siteName = site.name;
+
+        const siteMatch =
+            siteCodeList.find(
+                r => r.name.trim().toLowerCase() === siteName.trim().toLowerCase()
+            );
+
+        const fallbackMatch =
             sapCodes.find(
                 r => r.name.trim().toLowerCase() === siteName.trim().toLowerCase()
             );
 
+        const matchedCode =
+            (siteMatch && siteMatch.code) ? siteMatch.code : (fallbackMatch ? fallbackMatch.code : "");
+
         const card = document.createElement("div");
-        card.className = "site-card";
-        card.innerHTML =
-            '<h3>' + siteName + '</h3>' +
-            '<div class="form-grid">' +
-                '<div>' +
-                    '<label>Time In</label>' +
-                    '<div class="time-row">' +
-                        '<input type="time" id="siteTimeIn_' + index + '">' +
-                        '<button type="button" class="now-btn" onclick="setNow(\'siteTimeIn_' + index + '\')">Now</button>' +
-                    '</div>' +
-                '</div>' +
-                '<div>' +
-                    '<label>Time Out</label>' +
-                    '<div class="time-row">' +
-                        '<input type="time" id="siteTimeOut_' + index + '">' +
-                        '<button type="button" class="now-btn" onclick="setNow(\'siteTimeOut_' + index + '\')">Now</button>' +
-                    '</div>' +
-                '</div>' +
-            '</div>';
         card.dataset.site = siteName;
-        card.dataset.code = match ? match.code : "";
+        card.dataset.code = matchedCode;
+        card.dataset.status = site.status;
+
+        const statusLabel =
+            site.status === "completed" ? "Completed" :
+            site.status === "checked_in" ? "Checked In" :
+            "Not Started";
+
+        if(site.status === "completed"){
+
+            card.className = "site-card completed";
+            card.innerHTML =
+                '<h3>' + siteName + '<span class="site-status completed">' + statusLabel + '</span></h3>' +
+                '<div class="completed-summary">Time In: ' + site.timeIn + ' &nbsp;&nbsp; Time Out: ' + site.timeOut + '</div>';
+
+        } else if(site.status === "checked_in"){
+
+            card.className = "site-card";
+            card.innerHTML =
+                '<h3>' + siteName + '<span class="site-status checked_in">' + statusLabel + '</span></h3>' +
+                '<div class="completed-summary" style="color:#e65100;">Time In logged: ' + site.timeIn + '</div>' +
+                '<div class="form-grid">' +
+                    '<div>' +
+                        '<label>Time Out</label>' +
+                        '<div class="time-row">' +
+                            '<input type="time" id="siteTimeOut_' + index + '">' +
+                            '<button type="button" class="now-btn" onclick="setNow(\'siteTimeOut_' + index + '\')">Now</button>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="site-action-row">' +
+                    '<button type="button" class="site-action-btn" onclick="submitTimeOut(' + index + ')">Log Time Out</button>' +
+                '</div>';
+
+        } else {
+
+            card.className = "site-card";
+            card.innerHTML =
+                '<h3>' + siteName + '<span class="site-status not_started">' + statusLabel + '</span></h3>' +
+                '<div class="form-grid">' +
+                    '<div>' +
+                        '<label>Time In</label>' +
+                        '<div class="time-row">' +
+                            '<input type="time" id="siteTimeIn_' + index + '">' +
+                            '<button type="button" class="now-btn" onclick="setNow(\'siteTimeIn_' + index + '\')">Now</button>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="site-action-row">' +
+                    '<button type="button" class="site-action-btn" onclick="submitTimeIn(' + index + ')">Log Time In</button>' +
+                '</div>';
+
+        }
+
         container.appendChild(card);
 
     });
@@ -726,164 +824,137 @@ function setNow(fieldId){
 
 
 /* ================================
-   SUBMIT
+   SUBMIT — per site, per phase
    ================================
-   Reads each rendered site card's Time In/Time Out and submits one
-   log entry per site. No "mode: no-cors" here on purpose — that made
-   the browser blind to the server's response, so it always reported
-   "success" even when the server rejected the submission. A normal
-   fetch with Content-Type: text/plain avoids the CORS preflight Apps
-   Script doesn't handle, while still letting us read the real
-   success/failure message back.
+   Each site card has its own action: Log Time In (creates a new row
+   with Time Out blank) or Log Time Out (updates that same row) —
+   letting an employee log Time In now and come back later to log
+   Time Out, without needing both at once. No "mode: no-cors" on
+   purpose — that made the browser blind to the server's response, so
+   it always reported "success" even when the server rejected it.
 */
 
-function submitForm(){
+function getIdentityFields(){
+    return {
+        employeeType: document.getElementById("employeeType").value,
+        empNo: document.getElementById("employeeNumber").value,
+        name: document.getElementById("name").value.split(" (")[0],
+        department: document.getElementById("department").value,
+        costCenter: selectedCostCenter
+    };
+}
 
-    const statusEl =
-        document.getElementById("statusMsg");
+function submitTimeIn(index){
+
+    const statusEl = document.getElementById("statusMsg");
 
     if(!isApproved){
-
         statusEl.textContent = "This OBT entry is not approved yet.";
         statusEl.className = "status-msg error";
         return;
-
     }
 
-    const employeeType =
-        document.getElementById("employeeType").value;
+    const card = document.querySelectorAll("#siteEntries .site-card")[index];
+    const timeIn = document.getElementById("siteTimeIn_" + index).value;
 
-    const empNo =
-        document.getElementById("employeeNumber").value;
-
-    const name =
-        document.getElementById("name").value.split(" (")[0];
-
-    const department =
-        document.getElementById("department").value;
-
-    const costCenter =
-        selectedCostCenter;
-
-    if(!employeeType){
-        statusEl.textContent = "Please select an employee type (SEMI or DAILY).";
+    if(!timeIn){
+        statusEl.textContent = "Please provide a Time In for " + card.dataset.site + ".";
         statusEl.className = "status-msg error";
         return;
     }
 
-    if(!empNo){
-        statusEl.textContent = "Please select an employee.";
-        statusEl.className = "status-msg error";
-        return;
-    }
-
-    if(EMPLOYEE_DATA_URL.indexOf("PASTE_YOUR") === 0){
-        statusEl.textContent = "Web App URL not configured yet. See setup instructions.";
-        statusEl.className = "status-msg error";
-        return;
-    }
-
-    const cards = document.querySelectorAll("#siteEntries .site-card");
-    if(cards.length === 0){
-        statusEl.textContent = "No approved sites to submit.";
-        statusEl.className = "status-msg error";
-        return;
-    }
-
-    const siteEntries = [];
-    let missing = [];
-
-    cards.forEach((card, index) => {
-        const timeIn = document.getElementById("siteTimeIn_" + index).value;
-        const timeOut = document.getElementById("siteTimeOut_" + index).value;
-        if(!timeIn || !timeOut){
-            missing.push(card.dataset.site);
-        }
-        siteEntries.push({
-            site: card.dataset.site,
-            code: card.dataset.code,
-            timeIn: timeIn,
-            timeOut: timeOut
-        });
-    });
-
-    if(missing.length > 0){
-        statusEl.textContent = "Please provide both Time In and Time Out for: " + missing.join(", ");
-        statusEl.className = "status-msg error";
-        return;
-    }
-
-    const submitBtn =
-        document.getElementById("submitBtn");
-
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Submitting...";
-
+    const identity = getIdentityFields();
+    const btn = card.querySelector(".site-action-btn");
+    btn.disabled = true;
+    btn.textContent = "Logging...";
     statusEl.textContent = "";
     statusEl.className = "status-msg";
 
-    const payload = {
-        employeeType: employeeType,
-        empNo: empNo,
-        name: name,
-        department: department,
-        costCenter: costCenter,
-        siteEntries: siteEntries
-    };
-
     fetch(EMPLOYEE_DATA_URL, {
-
         method: "POST",
-        headers: {
-            "Content-Type": "text/plain"
-        },
-        body: JSON.stringify(payload)
-
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(Object.assign({
+            formType: "timeIn",
+            site: card.dataset.site,
+            code: card.dataset.code,
+            timeIn: timeIn
+        }, identity))
     })
     .then(function(response){ return response.json(); })
     .then(function(res){
-
         if(res.success){
-
-            statusEl.textContent =
-                "Submitted successfully! Logged " + (res.entriesLogged || siteEntries.length) + " site(s).";
-
-            statusEl.className =
-                "status-msg success";
-
-            resetForm();
-
+            statusEl.textContent = "Time In logged for " + card.dataset.site + ".";
+            statusEl.className = "status-msg success";
+            checkApprovalStatus(identity.empNo);
         } else {
-
-            statusEl.textContent =
-                res.message || "Submission failed. Please try again.";
-
-            statusEl.className =
-                "status-msg error";
-
-            if(/not approved|approved OBT request/i.test(res.message || "")){
-                isApproved = false;
-                lockEntrySection();
-                checkApprovalStatus(empNo);
-            }
-
+            statusEl.textContent = res.message || "Failed to log Time In.";
+            statusEl.className = "status-msg error";
+            btn.disabled = false;
+            btn.textContent = "Log Time In";
         }
-
     })
-    .catch(function(err){
+    .catch(function(){
+        statusEl.textContent = "Failed to log Time In. Please try again.";
+        statusEl.className = "status-msg error";
+        btn.disabled = false;
+        btn.textContent = "Log Time In";
+    });
 
-        statusEl.textContent =
-            "Submission failed. Please try again.";
+}
 
-        statusEl.className =
-            "status-msg error";
+function submitTimeOut(index){
 
+    const statusEl = document.getElementById("statusMsg");
+
+    if(!isApproved){
+        statusEl.textContent = "This OBT entry is not approved yet.";
+        statusEl.className = "status-msg error";
+        return;
+    }
+
+    const card = document.querySelectorAll("#siteEntries .site-card")[index];
+    const timeOut = document.getElementById("siteTimeOut_" + index).value;
+
+    if(!timeOut){
+        statusEl.textContent = "Please provide a Time Out for " + card.dataset.site + ".";
+        statusEl.className = "status-msg error";
+        return;
+    }
+
+    const identity = getIdentityFields();
+    const btn = card.querySelector(".site-action-btn");
+    btn.disabled = true;
+    btn.textContent = "Logging...";
+    statusEl.textContent = "";
+    statusEl.className = "status-msg";
+
+    fetch(EMPLOYEE_DATA_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(Object.assign({
+            formType: "timeOut",
+            site: card.dataset.site,
+            timeOut: timeOut
+        }, identity))
     })
-    .finally(function(){
-
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Submit";
-
+    .then(function(response){ return response.json(); })
+    .then(function(res){
+        if(res.success){
+            statusEl.textContent = "Time Out logged for " + card.dataset.site + ".";
+            statusEl.className = "status-msg success";
+            checkApprovalStatus(identity.empNo);
+        } else {
+            statusEl.textContent = res.message || "Failed to log Time Out.";
+            statusEl.className = "status-msg error";
+            btn.disabled = false;
+            btn.textContent = "Log Time Out";
+        }
+    })
+    .catch(function(){
+        statusEl.textContent = "Failed to log Time Out. Please try again.";
+        statusEl.className = "status-msg error";
+        btn.disabled = false;
+        btn.textContent = "Log Time Out";
     });
 
 }
