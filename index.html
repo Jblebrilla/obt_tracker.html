@@ -321,6 +321,32 @@ select{
         <div>
 
             <label>
+                Request Type
+            </label>
+
+            <select
+                id="requestType"
+                onchange="onRequestTypeChange()">
+
+                <option value="">
+                    Select Type
+                </option>
+
+                <option value="ATTENDANCE">
+                    ATTENDANCE
+                </option>
+
+                <option value="OBT">
+                    OBT
+                </option>
+
+            </select>
+
+        </div>
+
+        <div>
+
+            <label>
                 Employee Type
             </label>
 
@@ -404,10 +430,12 @@ select{
 
     </div>
 
+    <datalist id="attendanceSiteDatalist"></datalist>
+
     <div id="entrySection" class="locked">
 
     <div id="siteEntries" class="site-entries">
-        <div class="no-sites-msg">Select your name above to see your approved sites here.</div>
+        <div class="no-sites-msg">Select a Request Type and your name above to get started.</div>
     </div>
 
     <div class="submit-row">
@@ -477,6 +505,14 @@ function loadEmployeeData(){
             semiEmployees = data.semi || [];
             sapCodes = data.sap || [];
             siteCodeList = data.sites || [];
+
+            const attendanceDatalist = document.getElementById("attendanceSiteDatalist");
+            attendanceDatalist.innerHTML = "";
+            siteCodeList.forEach(s => {
+                const option = document.createElement("option");
+                option.value = s.name;
+                attendanceDatalist.appendChild(option);
+            });
 
             typeDdl.disabled = false;
 
@@ -598,6 +634,29 @@ function renderApprovedSiteEntries(approvedSites){
 }
 
 
+/* ================================
+   REQUEST TYPE (ATTENDANCE vs OBT)
+   ================================
+   ATTENDANCE never needs approval — it skips the banner and the
+   OBT_Request.html detour entirely, and logs straight to its own
+   ATTENDANCE tab. OBT keeps the existing approval-gated flow.
+*/
+
+function onRequestTypeChange(){
+
+    document.getElementById("employeeNumber").value = "";
+    document.getElementById("name").value = "";
+    document.getElementById("department").value = "";
+    document.getElementById("costCenter").value = "";
+    selectedCostCenter = "";
+
+    hideApprovalBanner();
+    renderApprovedSiteEntries([]);
+    lockEntrySection();
+
+}
+
+
 function onEmployeeTypeChange(){
 
     const type =
@@ -690,7 +749,20 @@ function onEmployeeNameInput(){
         document.getElementById("costCenter").value =
             selectedCostCenter;
 
-        checkApprovalStatus(employee.empNo);
+        const requestType =
+            document.getElementById("requestType").value;
+
+        if(requestType === "OBT"){
+            checkApprovalStatus(employee.empNo);
+        } else if(requestType === "ATTENDANCE"){
+            hideApprovalBanner();
+            showAttendanceEntry();
+        } else {
+            const statusEl = document.getElementById("statusMsg");
+            statusEl.textContent = "Please select a Request Type above.";
+            statusEl.className = "status-msg error";
+            lockEntrySection();
+        }
 
     } else {
 
@@ -801,6 +873,218 @@ function lockEntrySection(){
 
 function unlockEntrySection(){
     document.getElementById("entrySection").classList.remove("locked");
+}
+
+
+/* ================================
+   ATTENDANCE ENTRY (no approval needed)
+   ================================
+   One site only. Unlocks the entry section immediately — no banner,
+   no approval check — and shows Time In / Time Out for whichever
+   site the employee picks, reflecting today's actual logged state
+   from the ATTENDANCE tab.
+*/
+
+let lastAttendanceEmpNo = "";
+
+function showAttendanceEntry(){
+
+    lastAttendanceEmpNo = document.getElementById("employeeNumber").value;
+
+    unlockEntrySection();
+
+    const container = document.getElementById("siteEntries");
+    container.innerHTML =
+        '<div class="site-card" data-site="">' +
+            '<h3>Attendance</h3>' +
+            '<div class="form-grid">' +
+                '<div>' +
+                    '<label>Site</label>' +
+                    '<input type="text" id="attendanceSite" list="attendanceSiteDatalist" ' +
+                        'placeholder="Type to search..." autocomplete="off" onchange="onAttendanceSiteChange()">' +
+                '</div>' +
+            '</div>' +
+            '<div id="attendanceStatusArea"></div>' +
+        '</div>';
+
+}
+
+function onAttendanceSiteChange(){
+
+    const site = document.getElementById("attendanceSite").value.trim();
+    const area = document.getElementById("attendanceStatusArea");
+    const statusEl = document.getElementById("statusMsg");
+
+    if(!site){
+        area.innerHTML = "";
+        return;
+    }
+
+    area.innerHTML = '<div class="completed-summary">Checking status...</div>';
+
+    fetch(EMPLOYEE_DATA_URL + "?action=checkAttendanceStatus&empNo=" + encodeURIComponent(lastAttendanceEmpNo) +
+          "&site=" + encodeURIComponent(site) + "&_=" + Date.now())
+        .then(function(response){ return response.json(); })
+        .then(function(res){
+            renderAttendanceStatusCard(site, res || { status: "not_started" });
+        })
+        .catch(function(){
+            area.innerHTML = "";
+            statusEl.textContent = "Could not check today's status for this site. Please try again.";
+            statusEl.className = "status-msg error";
+        });
+
+}
+
+function renderAttendanceStatusCard(site, status){
+
+    const card = document.querySelector('#siteEntries .site-card');
+    card.dataset.site = site;
+    const area = document.getElementById("attendanceStatusArea");
+
+    if(status.status === "completed"){
+
+        area.innerHTML =
+            '<div class="completed-summary">Time In: ' + status.timeIn + ' &nbsp;&nbsp; Time Out: ' + status.timeOut + '</div>' +
+            '<div class="completed-summary">This site is already completed for today.</div>';
+
+    } else if(status.status === "checked_in"){
+
+        area.innerHTML =
+            '<div class="completed-summary" style="color:#e65100;">Time In logged: ' + status.timeIn + '</div>' +
+            '<div class="form-grid">' +
+                '<div>' +
+                    '<label>Time Out</label>' +
+                    '<div class="time-row">' +
+                        '<input type="time" id="attendanceTimeOut">' +
+                        '<button type="button" class="now-btn" onclick="setNow(\'attendanceTimeOut\')">Now</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="site-action-row">' +
+                '<button type="button" class="site-action-btn" onclick="submitAttendanceTimeOut()">Log Time Out</button>' +
+            '</div>';
+
+    } else {
+
+        area.innerHTML =
+            '<div class="form-grid">' +
+                '<div>' +
+                    '<label>Time In</label>' +
+                    '<div class="time-row">' +
+                        '<input type="time" id="attendanceTimeIn">' +
+                        '<button type="button" class="now-btn" onclick="setNow(\'attendanceTimeIn\')">Now</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="site-action-row">' +
+                '<button type="button" class="site-action-btn" onclick="submitAttendanceTimeIn()">Log Time In</button>' +
+            '</div>';
+
+    }
+
+}
+
+function submitAttendanceTimeIn(){
+
+    const statusEl = document.getElementById("statusMsg");
+    const card = document.querySelector('#siteEntries .site-card');
+    const site = card.dataset.site;
+    const timeIn = document.getElementById("attendanceTimeIn").value;
+
+    if(!timeIn){
+        statusEl.textContent = "Please provide a Time In for " + site + ".";
+        statusEl.className = "status-msg error";
+        return;
+    }
+
+    const identity = getIdentityFields();
+    const btn = card.querySelector(".site-action-btn");
+    btn.disabled = true;
+    btn.textContent = "Logging...";
+    statusEl.textContent = "";
+    statusEl.className = "status-msg";
+
+    fetch(EMPLOYEE_DATA_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(Object.assign({
+            formType: "attendanceTimeIn",
+            site: site,
+            timeIn: timeIn
+        }, identity))
+    })
+    .then(function(response){ return response.json(); })
+    .then(function(res){
+        if(res.success){
+            statusEl.textContent = "Time In logged for " + site + ".";
+            statusEl.className = "status-msg success";
+            onAttendanceSiteChange();
+        } else {
+            statusEl.textContent = res.message || "Failed to log Time In.";
+            statusEl.className = "status-msg error";
+            btn.disabled = false;
+            btn.textContent = "Log Time In";
+        }
+    })
+    .catch(function(){
+        statusEl.textContent = "Failed to log Time In. Please try again.";
+        statusEl.className = "status-msg error";
+        btn.disabled = false;
+        btn.textContent = "Log Time In";
+    });
+
+}
+
+function submitAttendanceTimeOut(){
+
+    const statusEl = document.getElementById("statusMsg");
+    const card = document.querySelector('#siteEntries .site-card');
+    const site = card.dataset.site;
+    const timeOut = document.getElementById("attendanceTimeOut").value;
+
+    if(!timeOut){
+        statusEl.textContent = "Please provide a Time Out for " + site + ".";
+        statusEl.className = "status-msg error";
+        return;
+    }
+
+    const identity = getIdentityFields();
+    const btn = card.querySelector(".site-action-btn");
+    btn.disabled = true;
+    btn.textContent = "Logging...";
+    statusEl.textContent = "";
+    statusEl.className = "status-msg";
+
+    fetch(EMPLOYEE_DATA_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(Object.assign({
+            formType: "attendanceTimeOut",
+            site: site,
+            timeOut: timeOut
+        }, identity))
+    })
+    .then(function(response){ return response.json(); })
+    .then(function(res){
+        if(res.success){
+            statusEl.textContent = "Time Out logged for " + site + ".";
+            statusEl.className = "status-msg success";
+            onAttendanceSiteChange();
+        } else {
+            statusEl.textContent = res.message || "Failed to log Time Out.";
+            statusEl.className = "status-msg error";
+            btn.disabled = false;
+            btn.textContent = "Log Time Out";
+        }
+    })
+    .catch(function(){
+        statusEl.textContent = "Failed to log Time Out. Please try again.";
+        statusEl.className = "status-msg error";
+        btn.disabled = false;
+        btn.textContent = "Log Time Out";
+    });
+
 }
 
 
@@ -962,6 +1246,7 @@ function submitTimeOut(index){
 
 function resetForm(){
 
+    document.getElementById("requestType").value = "";
     document.getElementById("employeeType").value = "";
     document.getElementById("employeeNumber").value = "";
     document.getElementById("name").value = "";
@@ -973,7 +1258,7 @@ function resetForm(){
 
     renderApprovedSiteEntries([]);
     document.getElementById("siteEntries").innerHTML =
-        '<div class="no-sites-msg">Select your name above to see your approved sites here.</div>';
+        '<div class="no-sites-msg">Select a Request Type and your name above to get started.</div>';
 
     hideApprovalBanner();
     lockEntrySection();
