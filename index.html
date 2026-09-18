@@ -940,6 +940,23 @@ function renderAttendanceStatusCard(site, status){
 
     const card = document.querySelector('#siteEntries .site-card');
     card.dataset.site = site;
+
+    // Resolve this site's Project Code from the SITE tab (falling back to
+    // the Project Code master list) so it gets logged alongside the entry —
+    // same lookup the OBT flow does.
+    const siteMatch =
+        siteCodeList.find(
+            r => r.name.trim().toLowerCase() === site.trim().toLowerCase()
+        );
+
+    const fallbackMatch =
+        sapCodes.find(
+            r => r.name.trim().toLowerCase() === site.trim().toLowerCase()
+        );
+
+    card.dataset.code =
+        (siteMatch && siteMatch.code) ? siteMatch.code : (fallbackMatch ? fallbackMatch.code : "");
+
     const area = document.getElementById("attendanceStatusArea");
 
     if(status.status === "completed"){
@@ -1011,6 +1028,7 @@ function submitAttendanceTimeIn(){
         body: JSON.stringify(Object.assign({
             formType: "attendanceTimeIn",
             site: site,
+            code: card.dataset.code,
             timeIn: timeIn
         }, identity))
     })
