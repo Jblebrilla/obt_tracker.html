@@ -558,22 +558,17 @@ function renderApprovedSiteEntries(approvedSites){
 
         const siteName = site.name;
 
+        // Look up this project's Site Location and SAP Code from the
+        // SITES tab so all three get logged together.
         const siteMatch =
             siteCodeList.find(
                 r => r.name.trim().toLowerCase() === siteName.trim().toLowerCase()
             );
 
-        const fallbackMatch =
-            sapCodes.find(
-                r => r.name.trim().toLowerCase() === siteName.trim().toLowerCase()
-            );
-
-        const matchedCode =
-            (siteMatch && siteMatch.code) ? siteMatch.code : (fallbackMatch ? fallbackMatch.code : "");
-
         const card = document.createElement("div");
         card.dataset.site = siteName;
-        card.dataset.code = matchedCode;
+        card.dataset.location = siteMatch ? siteMatch.location : "";
+        card.dataset.sapCode = siteMatch ? siteMatch.sapCode : "";
         card.dataset.status = site.status;
 
         const statusLabel =
@@ -941,21 +936,15 @@ function renderAttendanceStatusCard(site, status){
     const card = document.querySelector('#siteEntries .site-card');
     card.dataset.site = site;
 
-    // Resolve this site's Project Code from the SITE tab (falling back to
-    // the Project Code master list) so it gets logged alongside the entry —
-    // same lookup the OBT flow does.
+    // Resolve this project's Site Location and SAP Code from the SITES
+    // tab so all three get logged together — same lookup the OBT flow does.
     const siteMatch =
         siteCodeList.find(
             r => r.name.trim().toLowerCase() === site.trim().toLowerCase()
         );
 
-    const fallbackMatch =
-        sapCodes.find(
-            r => r.name.trim().toLowerCase() === site.trim().toLowerCase()
-        );
-
-    card.dataset.code =
-        (siteMatch && siteMatch.code) ? siteMatch.code : (fallbackMatch ? fallbackMatch.code : "");
+    card.dataset.location = siteMatch ? siteMatch.location : "";
+    card.dataset.sapCode = siteMatch ? siteMatch.sapCode : "";
 
     const area = document.getElementById("attendanceStatusArea");
 
@@ -1028,7 +1017,8 @@ function submitAttendanceTimeIn(){
         body: JSON.stringify(Object.assign({
             formType: "attendanceTimeIn",
             site: site,
-            code: card.dataset.code,
+            location: card.dataset.location,
+            sapCode: card.dataset.sapCode,
             timeIn: timeIn
         }, identity))
     })
@@ -1178,7 +1168,8 @@ function submitTimeIn(index){
         body: JSON.stringify(Object.assign({
             formType: "timeIn",
             site: card.dataset.site,
-            code: card.dataset.code,
+            location: card.dataset.location,
+            sapCode: card.dataset.sapCode,
             timeIn: timeIn
         }, identity))
     })
